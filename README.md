@@ -1,1 +1,0 @@
-# pizarra-matematica-3D
