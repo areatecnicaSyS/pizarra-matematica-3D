@@ -6,14 +6,14 @@ import sympy as sp
 # Configuración de la página con el logo corporativo como favicon
 st.set_page_config(
     page_title="Pizarra Matemática - Área Técnica",
-    page_icon="logo.jpg",
+    page_icon="logo.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # Menú lateral con el logo corporativo
 with st.sidebar:
-  st.image("logo.jpg", use_container_width=True)
+  st.image("logo.png", use_container_width=True)
   st.markdown("---")
   modulo = st.selectbox(
       "Seleccionar Herramienta",
