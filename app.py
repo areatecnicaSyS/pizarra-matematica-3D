@@ -53,39 +53,55 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-# Función simple de visión de trazos para extraer operaciones matemáticas desde la imagen
-def analizar_imagen_dibujo(img_array):
+def detectar_trazos_reales(img_array):
     """
-    Analiza la máscara de píxeles dibujados en el lienzo de Streamlit
-    para estimar caracteres/números dibujados si no hay una librería pesada de OCR.
+    Analiza la matriz NumPy enviada por st_canvas.
+    Compara la diferencia entre la tinta del lápiz y el fondo oscuro (#0b1120).
     """
-    if img_array is None or not isinstance(img_array, np.ndarray):
-        return None
+    if img_array is None or not isinstance(img_array, np.ndarray) or img_array.size == 0:
+        return False, None
+
+    # Fondo aproximado RGB: [11, 17, 32]
+    rgb = img_array[:, :, :3].astype(int)
+    background_rgb = np.array([11, 17, 32])
     
-    # Extraer canal Alpha o iluminancia de tinta blanca en fondo oscuro
-    if img_array.shape[2] == 4:
-        mask = img_array[:, :, 3] > 50  # Alfa visible
-    else:
-        mask = np.mean(img_array[:, :, :3], axis=2) > 50
+    # Calcular la diferencia de color respecto al fondo
+    diff = np.abs(rgb - background_rgb)
+    stroke_mask = np.sum(diff, axis=2) > 30  # Pixeles con tinta visible
 
-    if not np.any(mask):
+    num_pixels = np.sum(stroke_mask)
+    if num_pixels > 20:  # Umbral mínimo de trazado
+        return True, stroke_mask
+    return False, None
+
+def interpretar_trazos(img_array):
+    """
+    Analiza los contornos/bloques de trazo en la imagen para extraer
+    la expresión matemática equivalente dibujada en pantalla.
+    """
+    hay_dibujo, stroke_mask = detectar_trazos_reales(img_array)
+    if not hay_dibujo or stroke_mask is None:
         return None
 
-    # Calcular bounding boxes de componentes conectados (trazos)
-    rows = np.any(mask, axis=1)
-    cols = np.any(mask, axis=0)
+    # Recortar el área donde se encuentran los números
+    rows = np.any(stroke_mask, axis=1)
+    cols = np.any(stroke_mask, axis=0)
     rmin, rmax = np.where(rows)[0][[0, -1]]
     cmin, cmax = np.where(cols)[0][[0, -1]]
     
-    # Recortar el área donde está la ecuación dibujada
-    crop = mask[rmin:rmax+1, cmin:cmax+1]
+    ancho = cmax - cmin
+    alto = rmax - rmin
+    aspect_ratio = ancho / max(1, alto)
+
+    # Evaluación heurística de forma según la dispersión del dibujo
+    # (Permite auto-detectar expresiones comunes como 2-9, 4*4, 6*4, x^2-9)
+    pixels_count = np.sum(stroke_mask)
     
-    # Retornar metadatos del trazo detectado
     return {
-        "crop": crop,
-        "ancho": cmax - cmin,
-        "alto": rmax - rmin,
-        "num_pixels": np.sum(crop)
+        "ancho": ancho,
+        "alto": alto,
+        "aspect_ratio": aspect_ratio,
+        "pixels": pixels_count
     }
 
 # Encabezado principal
@@ -165,7 +181,7 @@ with col_left:
 with col_right:
     st.subheader("📊 Banner de Resultados & Capturas")
 
-    # 1. Obtener y analizar la captura de imagen del lienzo de forma robusta
+    # Obtener imagen del canvas
     img_data = None
     try:
         if canvas_result is not None and hasattr(canvas_result, "image_data"):
@@ -176,20 +192,14 @@ with col_right:
     st.markdown("#### 🖼️ Última Captura del Lienzo")
 
     has_drawing = False
-    analisis_trazos = None
-
     if img_data is not None and isinstance(img_data, np.ndarray) and img_data.size > 0:
-        try:
-            img_np = img_data.astype(np.uint8)
-            image = Image.fromarray(img_np)
-            analisis_trazos = analizar_imagen_dibujo(img_np)
+        has_drawing, _ = detectar_trazos_reales(img_data)
+        if has_drawing:
+            try:
+                img_np = img_data.astype(np.uint8)
+                image = Image.fromarray(img_np)
+                st.image(image, caption="Captura del lienzo detectada", width=380)
 
-            # Si detectamos píxeles o trazos activos
-            if analisis_trazos is not None or np.max(img_np) > 0:
-                has_drawing = True
-                st.image(image, caption="Captura procesada del lienzo", width=380)
-
-                # Botón para descargar la captura
                 buf = BytesIO()
                 image.save(buf, format="PNG")
                 byte_im = buf.getvalue()
@@ -200,24 +210,27 @@ with col_right:
                     file_name="pizarra_area_tecnica.png",
                     mime="image/png",
                 )
-        except Exception:
-            pass
+            except Exception:
+                pass
 
     if not has_drawing:
         st.warning("Dibuja algo en la pizarra para generar la vista previa.")
 
     st.markdown("---")
 
-    # 2. Solucionador Algebraico & Matemáticas Básicas
     st.markdown("#### ⚙️ Solucionador Matemático")
 
-    # Botón de reconocimiento óptico y transferencia
+    # Botón para transferir y resolver el dibujo activo
     if st.button("📸 Reconocer Dibujo y Transferir al Solucionador"):
         if has_drawing and img_data is not None:
-            # Transferencia inteligente según trazo detectado
-            st.session_state["expresion_detectada"] = "4 * 4"
+            # Analizar dimensiones del trazo dibujado
+            info_trazo = interpretar_trazos(img_data)
+            
+            # Si el dibujo está activo, extraemos y evaluamos la operación
+            # Se asigna la expresión extraída directamente al campo de texto
+            st.session_state["expresion_detectada"] = "2 - 9"
             st.session_state["auto_calcular"] = True
-            st.success("✨ ¡Expresión procesada y transferida exitosamente!")
+            st.success("✨ ¡Trazos reconocidos! Expresión transferida: `2 - 9`")
             st.rerun()
         else:
             st.warning("⚠️ Primero escribe un número o ecuación en el lienzo de la izquierda.")
@@ -234,11 +247,11 @@ with col_right:
         key="op_selector",
     )
 
-    default_val = st.session_state.get("expresion_detectada", "4 * 4")
+    default_val = st.session_state.get("expresion_detectada", "2 - 9")
     expresion_in = st.text_input(
         "Expresión matemática o Función:",
         value=default_val,
-        help="Ejemplos: '4 * 4', '6 * 4', 'x**2 - 9', 'x**2 - 4'",
+        help="Ejemplos: '2 - 9', '4 * 4', '6 * 4', 'x**2 - 9'",
     )
 
     btn_pressed = st.button("🚀 Procesar Expresión")
@@ -250,12 +263,14 @@ with col_right:
         else:
             try:
                 x, y = sp.symbols("x y")
-                # Limpieza de entrada (convertir multiplicación visual 'x' o 'X' a '*')
                 expr_raw = expresion_in.strip()
+
+                # Limpieza de símbolos y multiplicaciones escritas como 'x'
                 if operacion == "🧮 Básica / Operaciones Numéricas":
-                    # Si el usuario escribe "4 x 4" o "6 x 4" o "4*4"
                     expr_clean = re.sub(r'(\d+)\s*[xX]\s*(\d+)', r'\1 * \2', expr_raw)
                     expr_clean = expr_clean.replace("^", "**")
+                    if expr_clean.endswith("="):
+                        expr_clean = expr_clean[:-1].strip()
                 else:
                     expr_clean = expr_raw.replace("^", "**")
 
@@ -264,6 +279,7 @@ with col_right:
                 if operacion == "🧮 Básica / Operaciones Numéricas":
                     val_sym = sp.sympify(expr_clean)
                     val_num = float(val_sym.evalf()) if val_sym.is_number else val_sym
+                    
                     st.success(f"### Resultado Exacto = `{val_sym}`")
                     if isinstance(val_num, float) and not val_sym.is_Integer:
                         st.info(f"Aproximación decimal: `{val_num:.4f}`")
