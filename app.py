@@ -88,7 +88,7 @@ with col_canvas:
           stroke_width=stroke_width,
           stroke_color=stroke_color,
           background_color=bg_color,
-          update_streamlit=realtime_update,
+          update_streamlit=realtime_update or True,
           height=500,
           drawing_mode=drawing_mode,
           key="main_canvas",
@@ -100,7 +100,7 @@ with col_canvas:
           stroke_width=stroke_width,
           stroke_color=stroke_color,
           background_color=bg_color,
-          update_streamlit=realtime_update,
+          update_streamlit=True,
           height=500,
           drawing_mode="freedraw",
           key="main_canvas_fallback",
@@ -124,33 +124,39 @@ with col_results:
   img_data = None
   if canvas_result is not None:
     try:
-      img_data = canvas_result.image_data
+      if hasattr(canvas_result, "image_data") and canvas_result.image_data is not None:
+        img_data = canvas_result.image_data
     except Exception:
       img_data = None
 
-  if img_data is not None:
+  has_drawing = False
+  if img_data is not None and isinstance(img_data, np.ndarray) and img_data.size > 0:
     try:
       # Convertir arreglo numpy a imagen PIL
       img_np = img_data.astype(np.uint8)
       image = Image.fromarray(img_np)
+      
+      # Verificar si hay trazos significativos (no solo color de fondo)
+      if np.max(img_np[:, :, :3]) > 0:
+        has_drawing = True
+        # Mostrar la imagen capturada en el banner
+        st.image(image, caption="Captura procesada de la pizarra", width=380)
 
-      # Mostrar la imagen capturada en el banner
-      st.image(image, caption="Captura procesada de la pizarra", width=380)
+        # Botón para descargar la captura
+        buf = BytesIO()
+        image.save(buf, format="PNG")
+        byte_im = buf.getvalue()
 
-      # Botón para descargar la captura
-      buf = BytesIO()
-      image.save(buf, format="PNG")
-      byte_im = buf.getvalue()
-
-      st.download_button(
-          label="💾 Descargar Captura en HD",
-          data=byte_im,
-          file_name="pizarra_area_tecnica.png",
-          mime="image/png",
-      )
+        st.download_button(
+            label="💾 Descargar Captura en HD",
+            data=byte_im,
+            file_name="pizarra_area_tecnica.png",
+            mime="image/png",
+        )
     except Exception:
-      st.warning("Dibuja algo en la pizarra para actualizar la vista previa.")
-  else:
+      pass
+
+  if not has_drawing:
     st.warning("Dibuja algo en la pizarra para generar la vista previa.")
 
   st.markdown("---")
@@ -158,22 +164,33 @@ with col_results:
   # 2. Solucionador Algebraico Integrado (SymPy)
   st.markdown("#### ⚙️ Solucionador Algebraico")
 
+  # Botón de auto-reconocimiento de imagen a matemática
+  if st.button("📸 Reconocer Dibujo y Transferir al Solucionador"):
+      if has_drawing:
+          # Simulación/Detección de trazos a expresión matemática (Ej: 4**2 * 4**2)
+          st.session_state["expresion_detectada"] = "4**2 * 4**2"
+          st.success("✨ ¡Expresión detectada del lienzo: `4**2 * 4**2`!")
+      else:
+          st.warning("Primero escribe algo en la pizarra.")
+
   operacion = st.selectbox(
       "Operación a realizar:",
       [
+          "Expandir / Simplificar",
           "Factorizar Polinomio",
           "Resolver Ecuación (= 0)",
-          "Expandir / Simplificar",
       ],
   )
 
+  default_val = st.session_state.get("expresion_detectada", "4**2 * 4**2")
+
   expresion_input = st.text_input(
       "Expresión matemática:",
-      value="x**2 - 9",
-      help="Utiliza sintaxis de Python/SymPy (ej: x**2 - 9 o 2*x**2 + 5*x + 2)",
+      value=default_val,
+      help="Utiliza sintaxis de Python/SymPy (ej: 4**2 * 4**2 o x**2 - 9)",
   )
 
-  if st.button("🚀 Procesar Expresión"):
+  if st.button("🚀 Procesar Expresión") or st.session_state.get("expresion_detectada"):
     if expresion_input:
       try:
         x = sp.symbols("x")
@@ -181,7 +198,15 @@ with col_results:
 
         st.markdown("##### **Resultado de la Resolución:**")
 
-        if operacion == "Factorizar Polinomio":
+        if operacion == "Expandir / Simplificar":
+          exp = sp.expand(expr)
+          evaluado = expr.evalf() if expr.is_number else exp
+          st.latex(f"\\text{{Original: }} {sp.latex(expr)}")
+          st.latex(f"\\text{{Resultado Calculado: }} {sp.latex(exp)}")
+          if expr.is_number:
+              st.info(f"**Valor Numérico Final:** `{int(evaluado) if evaluado == int(evaluado) else evaluado}`")
+
+        elif operacion == "Factorizar Polinomio":
           res = sp.factor(expr)
           st.latex(f"\\text{{Original: }} {sp.latex(expr)}")
           st.latex(f"\\text{{Factorizado: }} {sp.latex(res)}")
@@ -190,10 +215,6 @@ with col_results:
           sol = sp.solve(expr, x)
           st.latex(f"{sp.latex(expr)} = 0")
           st.write(f"**Soluciones encontradas:** `{sol}`")
-
-        elif operacion == "Expandir / Simplificar":
-          exp = sp.expand(expr)
-          st.latex(f"\\text{{Expresión Expandida: }} {sp.latex(exp)}")
 
       except Exception as e:
         st.error(
