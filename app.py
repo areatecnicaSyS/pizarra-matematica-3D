@@ -111,17 +111,19 @@ with col_results:
   # 1. Muestra de Captura del Canvas
   st.markdown("#### 🖼️ Última Captura del Lienzo")
 
-  # Validación segura para evitar RuntimeError si canvas_result no tiene aún datos de imagen
-  has_image = (
-      canvas_result is not None
-      and getattr(canvas_result, "image_data", None) is not None
-  )
+  # Obtener los datos de imagen de forma 100% segura contra RuntimeError
+  img_data = None
+  if canvas_result is not None:
+    try:
+      img_data = canvas_result.image_data
+    except Exception:
+      img_data = None
 
-  if has_image:
+  if img_data is not None:
     try:
       # Convertir arreglo numpy a imagen PIL
-      img_data = canvas_result.image_data.astype(np.uint8)
-      image = Image.fromarray(img_data)
+      img_np = img_data.astype(np.uint8)
+      image = Image.fromarray(img_np)
 
       # Mostrar la imagen capturada en el banner
       st.image(image, caption="Captura procesada de la pizarra", width=380)
@@ -138,9 +140,7 @@ with col_results:
           mime="image/png",
       )
     except Exception:
-      st.warning(
-          "Dibuja algo en la pizarra para actualizar la vista previa."
-      )
+      st.warning("Dibuja algo en la pizarra para actualizar la vista previa.")
   else:
     st.warning("Dibuja algo en la pizarra para generar la vista previa.")
 
