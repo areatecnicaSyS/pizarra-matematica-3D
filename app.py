@@ -64,8 +64,9 @@ with st.sidebar:
   stroke_color = st.color_picker("Color de Tinta:", "#FFFFFF")
   bg_color = "#0f172a"  # Fondo oscuro corporativo
 
+  # Desactivado por defecto para evitar sobrecargar la CPU del servidor gratuito de Streamlit
   realtime_update = st.checkbox(
-      "Actualizar banner en tiempo real", value=True
+      "Actualizar banner en tiempo real", value=False
   )
 
 st.title("🧮 Pizarra Digital Interactiva con Solucionador Algebraico")
