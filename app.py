@@ -1,99 +1,190 @@
+from io import BytesIO
 import numpy as np
+from PIL import Image
 import plotly.graph_objects as go
 import streamlit as st
+from streamlit_drawable_canvas import st_canvas
 import sympy as sp
 
-# Configuración de la página con el logo corporativo como favicon
+# ---------------------------------------------------------
+# Configuración inicial de la página
+# ---------------------------------------------------------
 st.set_page_config(
-    page_title="Pizarra Matemática - Área Técnica",
+    page_title="Pizarra Digital - Área Técnica",
     page_icon="logo.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
-# Menú lateral con el logo corporativo
+# Estilos CSS personalizados para adaptar el diseño corporativo
+st.markdown(
+    """
+    <style>
+    .main {
+        background-color: #0f172a;
+    }
+    .stButton>button {
+        width: 100%;
+        border-radius: 8px;
+        font-weight: 600;
+    }
+    .stSelectbox, .stTextInput {
+        color: #f8fafc;
+    }
+    </style>
+""",
+    unsafe_allow_html=True,
+)
+
+# ---------------------------------------------------------
+# Barra Lateral (Sidebar) con Logo y Controles de Dibujo
+# ---------------------------------------------------------
 with st.sidebar:
-  st.image("logo.png", use_container_width=True)
+  try:
+    st.image("logo.png", use_container_width=True)
+  except Exception:
+    st.title("Área Técnica")
+
   st.markdown("---")
-  modulo = st.selectbox(
-      "Seleccionar Herramienta",
+  st.subheader("🎨 Controles de la Pizarra")
+
+  # Herramientas de dibujo
+  drawing_mode = st.radio(
+      "Herramienta de Trazo:",
+      ("freedraw", "transform"),
+      format_func=lambda x: (
+          "✏️ Lápiz Digital / Mouse"
+          if x == "freedraw"
+          else "🔍 Mover / Seleccionar"
+      ),
+  )
+
+  stroke_width = st.slider("Grosor del Lápiz (px):", 1, 25, 3)
+
+  stroke_color = st.color_picker("Color de Tinta:", "#FFFFFF")
+  bg_color = "#0f172a"  # Fondo oscuro corporativo
+
+  realtime_update = st.checkbox(
+      "Actualizar banner en tiempo real", value=True
+  )
+
+st.title("🧮 Pizarra Digital Interactiva con Solucionador Algebraico")
+st.markdown(
+    "Dibuja o escribe tus expresiones con lápiz digital/mouse, captura el"
+    " lienzo y resuelve polinomios o ecuaciones en tiempo real."
+)
+
+col_canvas, col_results = st.columns([7, 5])
+
+# ---------------------------------------------------------
+# Columna Izquierda: Lienzo de Dibujo Táctil / Digital
+# ---------------------------------------------------------
+with col_canvas:
+  st.subheader("🖋️ Lienzo de Dibujo")
+
+  # Componente Canvas de Streamlit
+  canvas_result = st_canvas(
+      fill_color="rgba(255, 255, 255, 0.0)",  # Fondo transparente para trazado
+      stroke_width=stroke_width,
+      stroke_color=stroke_color,
+      background_color=bg_color,
+      update_streamlit=realtime_update,
+      height=500,
+      drawing_mode=drawing_mode,
+      key="main_canvas",
+  )
+
+  st.info(
+      "💡 Puedes dibujar con mouse, lápiz digital o pantalla táctil en el área"
+      " oscura superior."
+  )
+
+# ---------------------------------------------------------
+# Columna Derecha: Banner de Capturas y Resultados SymPy
+# ---------------------------------------------------------
+with col_results:
+  st.subheader("📊 Banner de Resultados & Capturas")
+
+  # 1. Muestra de Captura del Canvas
+  st.markdown("#### 🖼️ Última Captura del Lienzo")
+
+  if canvas_result.image_data is not None:
+    # Convertir arreglo numpy a imagen PIL
+    img_data = canvas_result.image_data.astype(np.uint8)
+    image = Image.fromarray(img_data)
+
+    # Mostrar la imagen capturada en el banner
+    st.image(image, caption="Captura procesada de la pizarra", width=380)
+
+    # Botón para descargar la captura
+    buf = BytesIO()
+    image.save(buf, format="PNG")
+    byte_im = buf.getvalue()
+
+    st.download_button(
+        label="💾 Descargar Captura en HD",
+        data=byte_im,
+        file_name="pizarra_area_tecnica.png",
+        mime="image/png",
+    )
+  else:
+    st.warning("Dibuja algo en la pizarra para generar la vista previa.")
+
+  st.markdown("---")
+
+  # 2. Solucionador Algebraico Integrado (SymPy)
+  st.markdown("#### ⚙️ Solucionador Algebraico")
+
+  operacion = st.selectbox(
+      "Operación a realizar:",
       [
-          "Visualizador 3D de Funciones",
-          "Factorización y Álgebra",
-          "Resolución de Ecuaciones",
+          "Factorizar Polinomio",
+          "Resolver Ecuación (= 0)",
+          "Expandir / Simplificar",
       ],
   )
 
-st.title("🧮 Pizarra Matemática con Álgebra y Modelado 3D")
-st.markdown(
-    "Herramienta interactiva desarrollada para la resolución, factorización y"
-    " visualización de funciones matemáticas en tiempo real."
-)
-
-# Definir símbolos
-x, y = sp.symbols("x y")
-
-if modulo == "Visualizador 3D de Funciones":
-  st.subheader("📊 Modelado Tridimensional Dinámico")
-
-  col1, col2 = st.sidebar.columns(2)
-  a = col1.slider("Amplitud (A)", 0.5, 5.0, 1.0)
-  b = col2.slider("Frecuencia (B)", -5.0, 5.0, 0.0)
-
-  # Generación de malla 3D
-  x_vals = np.linspace(-5, 5, 50)
-  y_vals = np.linspace(-5, 5, 50)
-  X, Y = np.meshgrid(x_vals, y_vals)
-  Z = a * np.sin(np.sqrt(X**2 + Y**2) + b)
-
-  fig = go.Figure(data=[go.Surface(z=Z, x=X, y=Y, colorscale="Viridis")])
-  fig.update_layout(
-      title="Superficie Matemática Generada",
-      autosize=True,
-      scene=dict(
-          xaxis_title="Eje X", yaxis_title="Eje Y", zaxis_title="Eje Z"
-      ),
-      height=600,
-  )
-  st.plotly_chart(fig, use_container_width=True)
-
-elif modulo == "Factorización y Álgebra":
-  st.subheader("⚙️ Factorización de Polinomios")
-
-  expresion_str = st.text_input(
-      "Introduce la expresión algebraica (ej: x**2 - 9 o 2*x**2 + 5*x + 2):",
-      "x**2 - 9",
+  expresion_input = st.text_input(
+      "Expresión matemática:",
+      value="x**2 - 9",
+      help="Utiliza sintaxis de Python/SymPy (ej: x**2 - 9 o 2*x**2 + 5*x + 2)",
   )
 
-  if expresion_str:
-    try:
-      expr = sp.sympify(expresion_str)
-      resultado = sp.factor(expr)
+  if st.button("🚀 Procesar Expresión"):
+    if expresion_input:
+      try:
+        x = sp.symbols("x")
+        expr = sp.sympify(expresion_input)
 
-      st.markdown("### Resultados:")
-      st.latex(f"\\text{{Expresión original: }} {sp.latex(expr)}")
-      st.latex(f"\\text{{Forma factorizada: }} {sp.latex(resultado)}")
-    except Exception as e:
-      st.error(
-          f"Error al interpretar la expresión. Revisa la sintaxis. Detalle: {e}"
-      )
+        st.markdown("##### **Resultado de la Resolución:**")
 
-elif modulo == "Resolución de Ecuaciones":
-  st.subheader("🎯 Resolución de Ecuaciones Básicas (= 0)")
+        if operacion == "Factorizar Polinomio":
+          res = sp.factor(expr)
+          st.latex(f"\\text{{Original: }} {sp.latex(expr)}")
+          st.latex(f"\\text{{Factorizado: }} {sp.latex(res)}")
 
-  ecuacion_str = st.text_input(
-      "Introduce la ecuación en función de x (ej: x**2 - 4):", "x**2 - 4"
-  )
+        elif operacion == "Resolver Ecuación (= 0)":
+          sol = sp.solve(expr, x)
+          st.latex(f"{sp.latex(expr)} = 0")
+          st.write(f"**Soluciones encontradas:** `{sol}`")
 
-  if ecuacion_str:
-    try:
-      expr = sp.sympify(ecuacion_str)
-      soluciones = sp.solve(expr, x)
+        elif operacion == "Expandir / Simplificar":
+          exp = sp.expand(expr)
+          st.latex(f"\\text{{Expresión Expandida: }} {sp.latex(exp)}")
 
-      st.markdown("### Resultados:")
-      st.latex(f"\\text{{Ecuación: }} {sp.latex(expr)} = 0")
-      st.write(f"**Raíces encontradas para $x$:** {soluciones}")
-    except Exception as e:
-      st.error(
-          f"Error al procesar la ecuación. Revisa la sintaxis. Detalle: {e}"
-      )
+      except Exception as e:
+        st.error(
+            f"Error al interpretar la expresión. Revisa la sintaxis. Detalle:"
+            f" {e}"
+        )
+```
+
+---
+
+### ¿Cómo subirlo a tu GitHub para que funcione en Streamlit Cloud?
+
+1. En tu repositorio de GitHub, actualiza el archivo `requirements.txt` con las dependencias listadas arriba.
+2. Actualiza el código del archivo `app.py`.
+3. Ve a **Streamlit Cloud** y haz clic en **"Manage App" -> "Reboot"**.
+
+¡Listo! De esta manera mantendrás el diseño en Python con Streamlit y la experiencia completa del lápiz interactivo y las capturas.
