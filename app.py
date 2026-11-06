@@ -171,7 +171,7 @@ with col_canvas:
         update_streamlit=realtime,
         height=460,
         drawing_mode=drawing_mode,
-        key="main_canvas_prod_v2",
+        key="main_canvas_prod_v3",
     )
 
     st.caption("💡 Tip: Escribe con claridad tus números u operaciones para mejorar la precisión.")
@@ -179,9 +179,14 @@ with col_canvas:
 with col_solver:
     st.markdown("### 📊 Banner de Resultados & Capturas")
 
+    # Safe extraction of image_data without triggering streamlit_drawable_canvas RuntimeError
     img_data = None
-    if canvas_result is not None and canvas_result.image_data is not None:
-        img_data = canvas_result.image_data
+    if canvas_result is not None:
+        try:
+            # Safely fetch image_data property avoiding internal _require_image_data_url exception
+            img_data = getattr(canvas_result, "image_data", None)
+        except Exception:
+            img_data = None
 
     hay_trazo, pil_img, mascara_tinta = procesar_lienzo_garantizado(img_data)
 
