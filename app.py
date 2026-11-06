@@ -176,6 +176,8 @@ with col_results:
   operacion = st.selectbox(
       "Operación a realizar:",
       [
+          "Básica / Operaciones Numéricas",
+          "Graficar en Plano Cartesiano (2D / 3D)",
           "Expandir / Simplificar",
           "Factorizar Polinomio",
           "Resolver Ecuación (= 0)",
@@ -185,20 +187,71 @@ with col_results:
   default_val = st.session_state.get("expresion_detectada", "4**2 * 4**2")
 
   expresion_input = st.text_input(
-      "Expresión matemática:",
+      "Expresión matemática o Función:",
       value=default_val,
-      help="Utiliza sintaxis de Python/SymPy (ej: 4**2 * 4**2 o x**2 - 9)",
+      help="Ejemplos básicos: 4**2 * 4**2 o (25 + 15)/2. Ejemplos de gráficos: x**2 - 4 o sin(x)",
   )
 
   if st.button("🚀 Procesar Expresión") or st.session_state.get("expresion_detectada"):
     if expresion_input:
       try:
-        x = sp.symbols("x")
+        x, y = sp.symbols("x y")
         expr = sp.sympify(expresion_input)
 
         st.markdown("##### **Resultado de la Resolución:**")
 
-        if operacion == "Expandir / Simplificar":
+        if operacion == "Básica / Operaciones Numéricas":
+          evaluado = expr.evalf()
+          st.latex(f"\\text{{Expresión: }} {sp.latex(expr)}")
+          if expr.is_number:
+              val_int_or_float = int(evaluado) if evaluado == int(evaluado) else float(evaluado)
+              st.success(f"**Resultado Exacto:** `{val_int_or_float}`")
+          else:
+              st.info(f"**Resultado Simplificado:** `{sp.simplify(expr)}`")
+
+        elif operacion == "Graficar en Plano Cartesiano (2D / 3D)":
+          st.latex(f"f(x) = {sp.latex(expr)}")
+          
+          # Generar puntos numéricos para la gráfica en el Plano Cartesiano
+          x_vals = np.linspace(-10, 10, 400)
+          f_num = sp.lambdify(x, expr, "numpy")
+          
+          try:
+              y_vals = f_num(x_vals)
+              if isinstance(y_vals, (int, float)):
+                  y_vals = np.full_like(x_vals, y_vals)
+                  
+              fig = go.Figure()
+              
+              # Trazar función
+              fig.add_trace(go.Scatter(
+                  x=x_vals, y=y_vals, 
+                  mode='lines', 
+                  name=f'f(x) = {expresion_input}',
+                  line=dict(color='#38bdf8', width=3)
+              ))
+              
+              # Configuración de Ejes del Plano Cartesiano
+              fig.update_layout(
+                  title="Plano Cartesiano Interactivo",
+                  xaxis_title="Eje X",
+                  yaxis_title="Eje Y",
+                  template="plotly_dark",
+                  paper_bgcolor="#0f172a",
+                  plot_bgcolor="#1e293b",
+                  hovermode="x unified",
+                  margin=dict(l=20, r=20, t=40, b=20)
+              )
+              
+              # Añadir ejes centrados (Eje X e Y en el origen 0,0)
+              fig.add_hline(y=0, line_width=1, line_dash="dash", line_color="#94a3b8")
+              fig.add_vline(x=0, line_width=1, line_dash="dash", line_color="#94a3b8")
+              
+              st.plotly_chart(fig, use_container_width=True)
+          except Exception as graph_err:
+              st.error(f"No se pudo graficar la expresión. Asegúrate de que dependa de 'x'. Detalle: {graph_err}")
+
+        elif operacion == "Expandir / Simplificar":
           exp = sp.expand(expr)
           evaluado = expr.evalf() if expr.is_number else exp
           st.latex(f"\\text{{Original: }} {sp.latex(expr)}")
