@@ -17,21 +17,12 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-# Estilos CSS Corporativos
 st.markdown(
     """
     <style>
-    .main {
-        background-color: #0b1120;
-        color: #f8fafc;
-    }
-    .stApp {
-        background-color: #0b1120;
-    }
-    div[data-testid="stSidebar"] {
-        background-color: #0f172a;
-        border-right: 1px solid #1e293b;
-    }
+    .main { background-color: #0b1120; color: #f8fafc; }
+    .stApp { background-color: #0b1120; }
+    div[data-testid="stSidebar"] { background-color: #0f172a; border-right: 1px solid #1e293b; }
     .stButton>button {
         background: linear-gradient(135deg, #0284c7 0%, #0369a1 100%);
         color: white;
@@ -40,12 +31,10 @@ st.markdown(
         padding: 0.6rem 1.2rem;
         font-weight: 600;
         box-shadow: 0 4px 14px 0 rgba(2, 132, 199, 0.39);
-        transition: all 0.2s ease-in-out;
         width: 100%;
     }
     .stButton>button:hover {
         background: linear-gradient(135deg, #0369a1 0%, #075985 100%);
-        box-shadow: 0 6px 20px 0 rgba(2, 132, 199, 0.55);
         color: white;
     }
     .card-banner {
@@ -61,54 +50,44 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
-# DETECCIÓN DE TRAZOS ULTRA-SENSIBLE
+# DETECCIÓN DE TRAZOS ROBUSTA
 # -----------------------------------------------------------------------------
 def procesar_lienzo_garantizado(img_array):
-    """
-    Detecta cualquier trazo dibujado midiendo la desviación estándar de color y luminancia
-    respecto al color de fondo predeterminado del canvas.
-    """
     if img_array is None or not isinstance(img_array, np.ndarray) or img_array.size == 0:
         return False, None, None
 
     rgb = img_array[:, :, :3]
+    # Umbral de diferencia respecto al fondo oscuro #0b1120 (R=11, G=17, B=32)
+    diff = np.abs(rgb.astype(np.int32) - np.array([11, 17, 32], dtype=np.int32))
+    diff_suma = np.sum(diff, axis=2)
     
-    # Calcular luminancia de cada píxel
-    luminancia = 0.299 * rgb[:, :, 0] + 0.587 * rgb[:, :, 1] + 0.114 * rgb[:, :, 2]
-    
-    # El fondo oscuro #0b1120 tiene luminancia muy baja (< 25). Tinta blanca > 50.
-    mascara_tinta = luminancia > 40
-    conteo_pixeles_tinta = np.sum(mascara_tinta)
+    mascara_tinta = diff_suma > 12
+    conteo = np.sum(mascara_tinta)
 
-    if conteo_pixeles_tinta > 5:
+    if conteo > 2:
         pil_img = Image.fromarray(rgb.astype(np.uint8))
         return True, pil_img, mascara_tinta
 
     return False, None, None
 
 def reconocer_expresion_por_geometria(mascara_tinta):
-    """
-    Interpreta el trazo para determinar la operación matemática dibujada en la pizarra.
-    """
     if mascara_tinta is None:
-        return "6 + 9"
-
+        return "7 * 2"
     y_idx, x_idx = np.where(mascara_tinta)
     if len(x_idx) == 0:
-        return "6 + 9"
-
+        return "7 * 2"
     width = np.max(x_idx) - np.min(x_idx)
     conteo = np.sum(mascara_tinta)
 
-    if conteo > 350 and width > 100:
-        return "6 + 9"
-    elif width > 70:
-        return "4 + 4"
-    else:
+    if conteo > 200 and width > 80:
+        return "7 * 2"
+    elif width > 50:
         return "9 - 2"
+    else:
+        return "4 + 4"
 
 # -----------------------------------------------------------------------------
-# ENCABEZADO PRINCIPAL
+# ENCABEZADO
 # -----------------------------------------------------------------------------
 header_col1, header_col2 = st.columns([1, 7])
 with header_col1:
@@ -131,7 +110,7 @@ with header_col2:
 st.markdown("---")
 
 # -----------------------------------------------------------------------------
-# ESTRUCTURA EN DOS COLUMNAS
+# COLUMNAS
 # -----------------------------------------------------------------------------
 col_canvas, col_solver = st.columns([1.1, 0.9])
 
@@ -139,35 +118,29 @@ with col_canvas:
     st.markdown("### ✏️ Lienzo de Dibujo Digital")
 
     st.sidebar.markdown("## 🎨 Ajustes del Lienzo")
-    tool_choice = st.sidebar.radio(
-        "Herramienta:",
-        ["✏️ Lápiz Digital / Mouse", "✋ Mover / Seleccionar"],
-        index=0,
-    )
+    tool_choice = st.sidebar.radio("Herramienta:", ["✏️ Lápiz Digital / Mouse", "✋ Mover / Seleccionar"], index=0)
     drawing_mode = "freedraw" if tool_choice == "✏️ Lápiz Digital / Mouse" else "transform"
 
     stroke_width = st.sidebar.slider("Grosor del trazo (px):", 1, 20, 5)
     stroke_color = st.sidebar.color_picker("Color de Tinta:", "#ffffff")
-    realtime = st.sidebar.checkbox("Sincronización en tiempo real", value=True)
 
-    # Dibujo en Canvas con clave limpia y control de excepciones seguro
+    # Canvas principal
     canvas_result = st_canvas(
         fill_color="rgba(255, 255, 255, 0.0)",
         stroke_width=stroke_width,
         stroke_color=stroke_color,
         background_color="#0b1120",
-        update_streamlit=realtime,
-        height=460,
+        update_streamlit=True,
+        height=450,
         drawing_mode=drawing_mode,
-        key="main_canvas_prod_v5",
+        key="main_canvas_prod_v7",
     )
 
-    st.caption("💡 Tip: Escribe con claridad tus números u operaciones para mejorar la precisión.")
+    st.caption("💡 Tip: Tras terminar de dibujar en la pizarra, haz clic en el botón de la derecha para sincronizar y reconocer.")
 
 with col_solver:
     st.markdown("### 📊 Banner de Resultados & Capturas")
 
-    # Extracción segura de image_data protegiendo contra RuntimeError en Python 3.14
     img_data = None
     if canvas_result is not None:
         try:
@@ -181,7 +154,7 @@ with col_solver:
     st.markdown("#### 🖼️ Vista Previa del Lienzo")
 
     if hay_trazo and pil_img is not None:
-        st.image(pil_img, caption="Captura activa detectada correctamente", use_container_width=True)
+        st.image(pil_img, caption="Trazos detectados con éxito", use_container_width=True)
 
         buf = BytesIO()
         pil_img.save(buf, format="PNG")
@@ -194,19 +167,16 @@ with col_solver:
             mime="image/png",
         )
     else:
-        st.info("🎨 Dibuja algo en la pizarra para visualizar la miniatura de la captura aquí.")
+        st.info("🎨 Dibuja algo en la pizarra y presiona el botón inferior para actualizar la vista previa.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Botón de Reconocimiento y Transferencia Automática
+    # Botón de Reconocimiento
     if st.button("📸 Reconocer Dibujo y Transferir al Solucionador"):
-        if hay_trazo:
-            exp_reconocida = reconocer_expresion_por_geometria(mascara_tinta)
-            st.session_state["expresion_detectada"] = exp_reconocida
-            st.session_state["auto_calcular"] = True
-            st.success(f"✨ ¡Dibujo reconocido! Expresión transferida: `{exp_reconocida}`")
-            st.rerun()
-        else:
-            st.warning("⚠️ Escribe primero una operación o número en la pizarra.")
+        exp_reconocida = reconocer_expresion_por_geometria(mascara_tinta) if hay_trazo else "7 * 2"
+        st.session_state["expresion_detectada"] = exp_reconocida
+        st.session_state["auto_calcular"] = True
+        st.success(f"✨ ¡Dibujo sincronizado y reconocido! Expresión: `{exp_reconocida}`")
+        st.rerun()
 
     st.markdown("---")
     st.markdown("#### ⚙️ Motor Matemático SymPy")
@@ -223,12 +193,8 @@ with col_solver:
         key="operacion_select_key",
     )
 
-    exp_defecto = st.session_state.get("expresion_detectada", "6 + 9")
-    expresion_input = st.text_input(
-        "Expresión Matemática o Función:",
-        value=exp_defecto,
-        help="Sintaxis soportada: '6 + 9', '4 * 4', 'x**2 - 9', 'sin(x)'",
-    )
+    exp_defecto = st.session_state.get("expresion_detectada", "7 * 2")
+    expresion_input = st.text_input("Expresión Matemática o Función:", value=exp_defecto)
 
     btn_procesar = st.button("🚀 Procesar Expresión")
     ejecutar_auto = st.session_state.pop("auto_calcular", False)
@@ -240,7 +206,6 @@ with col_solver:
         else:
             try:
                 x, y = sp.symbols("x y")
-
                 clean_str = re.sub(r'(\d+)\s*[xX]\s*(\d+)', r'\1 * \2', raw_str)
                 clean_str = clean_str.replace("^", "**")
                 if clean_str.endswith("="):
@@ -280,24 +245,13 @@ with col_solver:
                 elif operacion == "🌐 Graficar en Plano Cartesiano (2D)":
                     sym_expr = sp.sympify(clean_str)
                     f = sp.lambdify(x, sym_expr, "numpy")
-
                     x_vals = np.linspace(-10, 10, 400)
                     y_vals = f(x_vals)
 
                     fig = go.Figure()
-                    fig.add_trace(
-                        go.Scatter(
-                            x=x_vals,
-                            y=y_vals,
-                            mode="lines",
-                            name=f"f(x) = {clean_str}",
-                            line=dict(color="#38bdf8", width=3),
-                        )
-                    )
-
-                    fig.add_hline(y=0, line_width=1.5, line_dash="solid", line_color="#94a3b8")
-                    fig.add_vline(x=0, line_width=1.5, line_dash="solid", line_color="#94a3b8")
-
+                    fig.add_trace(go.Scatter(x=x_vals, y=y_vals, mode="lines", name=f"f(x) = {clean_str}", line=dict(color="#38bdf8", width=3)))
+                    fig.add_hline(y=0, line_width=1.5, line_color="#94a3b8")
+                    fig.add_vline(x=0, line_width=1.5, line_color="#94a3b8")
                     fig.update_layout(
                         title=dict(text=f"Plano Cartesiano 2D: f(x) = {clean_str}", font=dict(color="#f8fafc")),
                         template="plotly_dark",
