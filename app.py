@@ -108,25 +108,36 @@ with col_results:
   # 1. Muestra de Captura del Canvas
   st.markdown("#### 🖼️ Última Captura del Lienzo")
 
-  if canvas_result.image_data is not None:
-    # Convertir arreglo numpy a imagen PIL
-    img_data = canvas_result.image_data.astype(np.uint8)
-    image = Image.fromarray(img_data)
+  # Validación segura para evitar RuntimeError si canvas_result no tiene aún datos de imagen
+  has_image = (
+      canvas_result is not None
+      and getattr(canvas_result, "image_data", None) is not None
+  )
 
-    # Mostrar la imagen capturada en el banner
-    st.image(image, caption="Captura procesada de la pizarra", width=380)
+  if has_image:
+    try:
+      # Convertir arreglo numpy a imagen PIL
+      img_data = canvas_result.image_data.astype(np.uint8)
+      image = Image.fromarray(img_data)
 
-    # Botón para descargar la captura
-    buf = BytesIO()
-    image.save(buf, format="PNG")
-    byte_im = buf.getvalue()
+      # Mostrar la imagen capturada en el banner
+      st.image(image, caption="Captura procesada de la pizarra", width=380)
 
-    st.download_button(
-        label="💾 Descargar Captura en HD",
-        data=byte_im,
-        file_name="pizarra_area_tecnica.png",
-        mime="image/png",
-    )
+      # Botón para descargar la captura
+      buf = BytesIO()
+      image.save(buf, format="PNG")
+      byte_im = buf.getvalue()
+
+      st.download_button(
+          label="💾 Descargar Captura en HD",
+          data=byte_im,
+          file_name="pizarra_area_tecnica.png",
+          mime="image/png",
+      )
+    except Exception:
+      st.warning(
+          "Dibuja algo en la pizarra para actualizar la vista previa."
+      )
   else:
     st.warning("Dibuja algo en la pizarra para generar la vista previa.")
 
