@@ -4,7 +4,7 @@ from io import BytesIO
 
 import numpy as np
 import plotly.graph_objects as go
-import st_canvas
+from streamlit_drawable_canvas import st_canvas
 import streamlit as st
 import sympy as sp
 from PIL import Image
@@ -101,7 +101,7 @@ with col_left:
 
   # Dibujar lienzo interactivo
   try:
-    canvas_result = st_canvas.st_canvas(
+    canvas_result = st_canvas(
         fill_color="rgba(255, 255, 255, 0.0)",
         stroke_width=stroke_width,
         stroke_color=stroke_color,
@@ -112,7 +112,7 @@ with col_left:
         key="main_canvas",
     )
   except ValueError:
-    canvas_result = st_canvas.st_canvas(
+    canvas_result = st_canvas(
         fill_color="rgba(255, 255, 255, 0.0)",
         stroke_width=stroke_width,
         stroke_color=stroke_color,
@@ -206,7 +206,7 @@ with col_right:
   )
 
   if st.button("🚀 Procesar Expresión"):
-    if not expresion_in.trim() if hasattr(expresion_in, 'trim') else not expresion_in.strip():
+    if not expresion_in.strip():
       st.error("Introduce una expresión válida.")
     else:
       try:

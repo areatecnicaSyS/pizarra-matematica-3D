@@ -1,11 +1,6 @@
 streamlit
-
 streamlit-drawable-canvas
-
 numpy
-
 plotly
-
 sympy
-
 Pillow
