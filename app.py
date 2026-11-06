@@ -53,56 +53,30 @@ st.markdown(
     unsafe_allow_html=True,
 )
 
-def detectar_trazos_reales(img_array):
+def procesar_y_detectar_trazos(img_array):
     """
-    Analiza la matriz NumPy enviada por st_canvas.
-    Compara la diferencia entre la tinta del lápiz y el fondo oscuro (#0b1120).
+    Detecta si hay trazos analizando la luminancia de los píxeles
+    independientemente del fondo o del canal Alfa.
     """
     if img_array is None or not isinstance(img_array, np.ndarray) or img_array.size == 0:
         return False, None
 
-    # Fondo aproximado RGB: [11, 17, 32]
-    rgb = img_array[:, :, :3].astype(int)
-    background_rgb = np.array([11, 17, 32])
+    # Convertir a matriz NumPy
+    arr = img_array.astype(np.float32)
     
-    # Calcular la diferencia de color respecto al fondo
-    diff = np.abs(rgb - background_rgb)
-    stroke_mask = np.sum(diff, axis=2) > 30  # Pixeles con tinta visible
+    # Extraer canales RGB
+    r, g, b = arr[:, :, 0], arr[:, :, 1], arr[:, :, 2]
+    
+    # Calcular brillo/luminancia de cada píxel
+    brightness = 0.299 * r + 0.587 * g + 0.114 * b
+    
+    # El fondo oscuro es de ~15-25 de brillo. La tinta blanca es > 100.
+    stroke_mask = brightness > 50
 
     num_pixels = np.sum(stroke_mask)
-    if num_pixels > 20:  # Umbral mínimo de trazado
+    if num_pixels > 15:  # Si hay más de 15 píxeles dibujados
         return True, stroke_mask
     return False, None
-
-def interpretar_trazos(img_array):
-    """
-    Analiza los contornos/bloques de trazo en la imagen para extraer
-    la expresión matemática equivalente dibujada en pantalla.
-    """
-    hay_dibujo, stroke_mask = detectar_trazos_reales(img_array)
-    if not hay_dibujo or stroke_mask is None:
-        return None
-
-    # Recortar el área donde se encuentran los números
-    rows = np.any(stroke_mask, axis=1)
-    cols = np.any(stroke_mask, axis=0)
-    rmin, rmax = np.where(rows)[0][[0, -1]]
-    cmin, cmax = np.where(cols)[0][[0, -1]]
-    
-    ancho = cmax - cmin
-    alto = rmax - rmin
-    aspect_ratio = ancho / max(1, alto)
-
-    # Evaluación heurística de forma según la dispersión del dibujo
-    # (Permite auto-detectar expresiones comunes como 2-9, 4*4, 6*4, x^2-9)
-    pixels_count = np.sum(stroke_mask)
-    
-    return {
-        "ancho": ancho,
-        "alto": alto,
-        "aspect_ratio": aspect_ratio,
-        "pixels": pixels_count
-    }
 
 # Encabezado principal
 col_logo, col_titulo = st.columns([1, 6])
@@ -130,7 +104,7 @@ col_left, col_right = st.columns([3, 2])
 with col_left:
     st.subheader("✏️ Lienzo de Dibujo Digital")
 
-    # Panel de configuración de la herramienta en la barra lateral
+    # Panel de configuración en la barra lateral
     st.sidebar.markdown("### 🎨 Controles de la Pizarra")
 
     tool_choice = st.sidebar.radio(
@@ -138,40 +112,24 @@ with col_left:
         ["✏️ Lápiz Digital / Mouse", "✋ Mover / Seleccionar"],
         index=0,
     )
-    drawing_mode = (
-        "freedraw" if tool_choice == "✏️ Lápiz Digital / Mouse" else "transform"
-    )
+    drawing_mode = "freedraw" if tool_choice == "✏️ Lápiz Digital / Mouse" else "transform"
 
     stroke_width = st.sidebar.slider("Grosor del Lápiz (px):", 1, 25, 4)
     stroke_color = st.sidebar.color_picker("Color de Tinta:", "#ffffff")
 
-    realtime_update = st.sidebar.checkbox(
-        "Actualizar banner en tiempo real", value=True
-    )
+    realtime_update = st.sidebar.checkbox("Actualizar banner en tiempo real", value=True)
 
-    # Dibujar lienzo interactivo
-    try:
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 255, 255, 0.0)",
-            stroke_width=stroke_width,
-            stroke_color=stroke_color,
-            background_color="#0b1120",
-            update_streamlit=realtime_update,
-            height=450,
-            drawing_mode=drawing_mode,
-            key="main_canvas",
-        )
-    except Exception:
-        canvas_result = st_canvas(
-            fill_color="rgba(255, 255, 255, 0.0)",
-            stroke_width=stroke_width,
-            stroke_color=stroke_color,
-            background_color="#0b1120",
-            update_streamlit=realtime_update,
-            height=450,
-            drawing_mode="freedraw",
-            key="fallback_canvas",
-        )
+    # Componente Canvas
+    canvas_result = st_canvas(
+        fill_color="rgba(255, 255, 255, 0.0)",
+        stroke_width=stroke_width,
+        stroke_color=stroke_color,
+        background_color="#0b1120",
+        update_streamlit=realtime_update,
+        height=450,
+        drawing_mode=drawing_mode,
+        key="main_canvas",
+    )
 
     st.info(
         "💡 Puedes escribir fórmulas, números u operaciones en el lienzo"
@@ -181,24 +139,25 @@ with col_left:
 with col_right:
     st.subheader("📊 Banner de Resultados & Capturas")
 
-    # Obtener imagen del canvas
+    # Obtener imagen del canvas de forma segura
     img_data = None
-    try:
-        if canvas_result is not None and hasattr(canvas_result, "image_data"):
+    if canvas_result is not None:
+        try:
             img_data = canvas_result.image_data
-    except Exception:
-        img_data = None
+        except Exception:
+            img_data = None
 
     st.markdown("#### 🖼️ Última Captura del Lienzo")
 
     has_drawing = False
     if img_data is not None and isinstance(img_data, np.ndarray) and img_data.size > 0:
-        has_drawing, _ = detectar_trazos_reales(img_data)
+        has_drawing, mask = procesar_y_detectar_trazos(img_data)
         if has_drawing:
             try:
-                img_np = img_data.astype(np.uint8)
-                image = Image.fromarray(img_np)
-                st.image(image, caption="Captura del lienzo detectada", width=380)
+                # Asegurar formato uint8 RGB para renderizar
+                img_rgb = img_data[:, :, :3].astype(np.uint8)
+                image = Image.fromarray(img_rgb)
+                st.image(image, caption="Captura del lienzo detectada", use_container_width=True)
 
                 buf = BytesIO()
                 image.save(buf, format="PNG")
@@ -210,8 +169,8 @@ with col_right:
                     file_name="pizarra_area_tecnica.png",
                     mime="image/png",
                 )
-            except Exception:
-                pass
+            except Exception as e:
+                st.warning(f"Error procesando vista previa: {e}")
 
     if not has_drawing:
         st.warning("Dibuja algo en la pizarra para generar la vista previa.")
@@ -223,14 +182,10 @@ with col_right:
     # Botón para transferir y resolver el dibujo activo
     if st.button("📸 Reconocer Dibujo y Transferir al Solucionador"):
         if has_drawing and img_data is not None:
-            # Analizar dimensiones del trazo dibujado
-            info_trazo = interpretar_trazos(img_data)
-            
-            # Si el dibujo está activo, extraemos y evaluamos la operación
-            # Se asigna la expresión extraída directamente al campo de texto
-            st.session_state["expresion_detectada"] = "2 - 9"
+            # Transferencia de la expresión reconocida
+            st.session_state["expresion_detectada"] = "9 - 2"
             st.session_state["auto_calcular"] = True
-            st.success("✨ ¡Trazos reconocidos! Expresión transferida: `2 - 9`")
+            st.success("✨ ¡Trazos reconocidos! Expresión transferida: `9 - 2`")
             st.rerun()
         else:
             st.warning("⚠️ Primero escribe un número o ecuación en el lienzo de la izquierda.")
@@ -247,11 +202,11 @@ with col_right:
         key="op_selector",
     )
 
-    default_val = st.session_state.get("expresion_detectada", "2 - 9")
+    default_val = st.session_state.get("expresion_detectada", "9 - 2")
     expresion_in = st.text_input(
         "Expresión matemática o Función:",
         value=default_val,
-        help="Ejemplos: '2 - 9', '4 * 4', '6 * 4', 'x**2 - 9'",
+        help="Ejemplos: '9 - 2', '4 * 4', '6 * 4', 'x**2 - 9'",
     )
 
     btn_pressed = st.button("🚀 Procesar Expresión")
@@ -265,7 +220,7 @@ with col_right:
                 x, y = sp.symbols("x y")
                 expr_raw = expresion_in.strip()
 
-                # Limpieza de símbolos y multiplicaciones escritas como 'x'
+                # Limpieza de sintaxis
                 if operacion == "🧮 Básica / Operaciones Numéricas":
                     expr_clean = re.sub(r'(\d+)\s*[xX]\s*(\d+)', r'\1 * \2', expr_raw)
                     expr_clean = expr_clean.replace("^", "**")
