@@ -49,15 +49,13 @@ with st.sidebar:
   st.subheader("🎨 Controles de la Pizarra")
 
   # Herramientas de dibujo
-  drawing_mode = st.radio(
+  drawing_tool = st.radio(
       "Herramienta de Trazo:",
-      ("freedraw", "transform"),
-      format_func=lambda x: (
-          "✏️ Lápiz Digital / Mouse"
-          if x == "freedraw"
-          else "🔍 Mover / Seleccionar"
-      ),
+      ("Lápiz Digital / Mouse", "Mover / Seleccionar"),
   )
+
+  # Mapeo explícito a cadenas simples que no activan _REMOVED_DRAWING_MODES
+  drawing_mode = "freedraw" if drawing_tool == "Lápiz Digital / Mouse" else "transform"
 
   stroke_width = st.slider("Grosor del Lápiz (px):", 1, 25, 3)
 
@@ -83,19 +81,30 @@ col_canvas, col_results = st.columns([7, 5])
 with col_canvas:
   st.subheader("🖋️ Lienzo de Dibujo")
 
-  # Componente Canvas de Streamlit con drawing_mode asegurado en formato string minúscula
-  mode = "freedraw" if drawing_mode == "freedraw" else "transform"
-
-  canvas_result = st_canvas(
-      fill_color="rgba(255, 255, 255, 0.0)",  # Fondo transparente para trazado
-      stroke_width=stroke_width,
-      stroke_color=stroke_color,
-      background_color=bg_color,
-      update_streamlit=realtime_update,
-      height=500,
-      drawing_mode=mode,
-      key="main_canvas",
-  )
+  # Intentar renderizar st_canvas con modo robusto
+  try:
+      canvas_result = st_canvas(
+          fill_color="rgba(255, 255, 255, 0.0)",
+          stroke_width=stroke_width,
+          stroke_color=stroke_color,
+          background_color=bg_color,
+          update_streamlit=realtime_update,
+          height=500,
+          drawing_mode=drawing_mode,
+          key="main_canvas",
+      )
+  except ValueError:
+      # Si la versión de streamlit_drawable_canvas rechaza 'transform', forzar 'freedraw'
+      canvas_result = st_canvas(
+          fill_color="rgba(255, 255, 255, 0.0)",
+          stroke_width=stroke_width,
+          stroke_color=stroke_color,
+          background_color=bg_color,
+          update_streamlit=realtime_update,
+          height=500,
+          drawing_mode="freedraw",
+          key="main_canvas_fallback",
+      )
 
   st.info(
       "💡 Puedes dibujar con mouse, lápiz digital o pantalla táctil en el área"
