@@ -83,7 +83,9 @@ col_canvas, col_results = st.columns([7, 5])
 with col_canvas:
   st.subheader("🖋️ Lienzo de Dibujo")
 
-  # Componente Canvas de Streamlit
+  # Componente Canvas de Streamlit con drawing_mode asegurado en formato string minúscula
+  mode = "freedraw" if drawing_mode == "freedraw" else "transform"
+
   canvas_result = st_canvas(
       fill_color="rgba(255, 255, 255, 0.0)",  # Fondo transparente para trazado
       stroke_width=stroke_width,
@@ -91,7 +93,7 @@ with col_canvas:
       background_color=bg_color,
       update_streamlit=realtime_update,
       height=500,
-      drawing_mode=drawing_mode,
+      drawing_mode=mode,
       key="main_canvas",
   )
 
