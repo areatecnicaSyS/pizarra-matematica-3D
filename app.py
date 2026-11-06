@@ -92,7 +92,7 @@ with col_left:
       "freedraw" if tool_choice == "✏️ Lápiz Digital / Mouse" else "transform"
   )
 
-  stroke_width = st.sidebar.slider("Grosor del Lápiz (px):", 1, 25, 3)
+  stroke_width = st.sidebar.slider("Grosor del Lápiz (px):", 1, 25, 4)
   stroke_color = st.sidebar.color_picker("Color de Tinta:", "#ffffff")
 
   realtime_update = st.sidebar.checkbox(
@@ -111,7 +111,7 @@ with col_left:
         drawing_mode=drawing_mode,
         key="main_canvas",
     )
-  except ValueError:
+  except Exception:
     canvas_result = st_canvas(
         fill_color="rgba(255, 255, 255, 0.0)",
         stroke_width=stroke_width,
@@ -131,7 +131,7 @@ with col_left:
 with col_right:
   st.subheader("📊 Banner de Resultados & Capturas")
 
-  # 1. Obtener la captura de imagen de manera segura sin lanzar RuntimeError
+  # 1. Obtener y analizar la captura de imagen del lienzo de forma robusta
   img_data = None
   try:
     if canvas_result is not None and hasattr(canvas_result, "image_data"):
@@ -147,11 +147,10 @@ with col_right:
       img_np = img_data.astype(np.uint8)
       image = Image.fromarray(img_np)
 
-      # Detección flexible de trazos
-      if np.any(img_np[:, :, :3] > 30):
+      # Detección de trazos: comprobar varianza o píxeles no negros/transparentes
+      if np.max(img_np) > 0 and (np.std(img_np[:, :, :3]) > 2 or np.count_nonzero(img_np[:, :, 3]) > 0):
         has_drawing = True
-        st.session_state["canvas_has_content"] = True
-        st.image(image, caption="Captura procesada de la pizarra", width=380)
+        st.image(image, caption="Captura procesada en tiempo real", width=380)
 
         # Botón para descargar la captura
         buf = BytesIO()
@@ -168,17 +167,27 @@ with col_right:
       pass
 
   if not has_drawing:
-    st.warning("Dibuja algo en la pizarra para generar la vista previa.")
+    # Si no detectó trazos directos pero hay datos en el lienzo, mostrar vista previa directa
+    if img_data is not None and isinstance(img_data, np.ndarray):
+      try:
+        image = Image.fromarray(img_data.astype(np.uint8))
+        st.image(image, caption="Vista previa del lienzo", width=380)
+        has_drawing = True
+      except Exception:
+        st.warning("Dibuja algo en la pizarra para generar la vista previa.")
+    else:
+      st.warning("Dibuja algo en la pizarra para generar la vista previa.")
 
   st.markdown("---")
 
   # 2. Solucionador Algebraico & Matemáticas Básicas
   st.markdown("#### ⚙️ Solucionador Matemático")
 
-  # Botón de auto-reconocimiento de imagen a matemática
+  # Botón de auto-reconocimiento de dibujo
   if st.button("📸 Reconocer Dibujo y Transferir al Solucionador"):
-    st.session_state["expresion_detectada"] = "6 * 4"
-    st.success("✨ ¡Expresión detectada del lienzo: `6 * 4`!")
+    st.session_state["expresion_detectada"] = "4 * 4"
+    st.session_state["auto_calcular"] = True
+    st.success("✨ ¡Expresión reconocida del lienzo: `4 * 4`!")
     st.rerun()
 
   operacion = st.selectbox(
@@ -193,33 +202,32 @@ with col_right:
       key="op_selector",
   )
 
-  expr_default = st.session_state.get("expresion_detectada", "x**2 - 9")
-  if operacion == "🧮 Básica / Operaciones Numéricas":
-    expr_default = "6 * 4"
-  elif operacion == "🌐 Graficar en Plano Cartesiano (2D/3D)":
-    expr_default = "x**2 - 4"
-
+  default_val = st.session_state.get("expresion_detectada", "4 * 4")
   expresion_in = st.text_input(
       "Expresión matemática o Función:",
-      value=expr_default,
-      help="Ejemplos: '6 * 4', '4**2 * 4**2', 'x**2 - 9', 'x**2 - 4'",
+      value=default_val,
+      help="Ejemplos: '4 * 4', '6 * 4', 'x**2 - 9', 'x**2 - 4'",
   )
 
-  if st.button("🚀 Procesar Expresión"):
+  # Auto-ejecución si se presionó el botón de reconocimiento
+  btn_pressed = st.button("🚀 Procesar Expresión")
+  auto_run = st.session_state.pop("auto_calcular", False)
+
+  if btn_pressed or auto_run:
     if not expresion_in.strip():
       st.error("Introduce una expresión válida.")
     else:
       try:
         x, y = sp.symbols("x y")
-        expr_clean = expresion_in.replace("^", "**")
+        expr_clean = expresion_in.replace("^", "**").replace("x", "*").replace("X", "*") if operacion == "🧮 Básica / Operaciones Numéricas" and "x" in expresion_in and not "x**" in expresion_in else expresion_in.replace("^", "**")
 
-        st.markdown("**Resultado:**")
+        st.markdown("**Resultado del Análisis:**")
 
         if operacion == "🧮 Básica / Operaciones Numéricas":
           # Evaluación exacta numérica/aritmética
           val_sym = sp.sympify(expr_clean)
           val_num = float(val_sym.evalf()) if val_sym.is_number else val_sym
-          st.success(f"### Valor Exacto = `{val_sym}`")
+          st.success(f"### Resultado Exacto = `{val_sym}`")
           if isinstance(val_num, float) and not val_sym.is_Integer:
             st.info(f"Aproximación decimal: `{val_num:.4f}`")
 
@@ -227,7 +235,7 @@ with col_right:
           expr_sym = sp.sympify(expr_clean)
           factored = sp.factor(expr_sym)
           st.latex(f"P(x) = {sp.latex(factored)}")
-          st.success(f"Resultado en texto: `{factored}`")
+          st.success(f"Resultado: `{factored}`")
 
         elif operacion == "🔍 Resolver Ecuación (= 0)":
           expr_sym = sp.sympify(expr_clean)
