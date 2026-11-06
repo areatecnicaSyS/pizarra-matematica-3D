@@ -1,4 +1,3 @@
-import io
 from io import BytesIO
 import re
 import numpy as np
@@ -151,7 +150,7 @@ with col_canvas:
     stroke_color = st.sidebar.color_picker("Color de Tinta:", "#ffffff")
     realtime = st.sidebar.checkbox("Sincronización en tiempo real", value=True)
 
-    # Dibujo en Canvas con clave limpia
+    # Dibujo en Canvas con clave limpia y control de excepciones seguro
     canvas_result = st_canvas(
         fill_color="rgba(255, 255, 255, 0.0)",
         stroke_width=stroke_width,
@@ -160,7 +159,7 @@ with col_canvas:
         update_streamlit=realtime,
         height=460,
         drawing_mode=drawing_mode,
-        key="main_canvas_prod_v4",
+        key="main_canvas_prod_v5",
     )
 
     st.caption("💡 Tip: Escribe con claridad tus números u operaciones para mejorar la precisión.")
@@ -168,7 +167,7 @@ with col_canvas:
 with col_solver:
     st.markdown("### 📊 Banner de Resultados & Capturas")
 
-    # Safe extraction of image_data without triggering streamlit_drawable_canvas RuntimeError
+    # Extracción segura de image_data protegiendo contra RuntimeError en Python 3.14
     img_data = None
     if canvas_result is not None:
         try:
@@ -244,7 +243,7 @@ with col_solver:
 
                 clean_str = re.sub(r'(\d+)\s*[xX]\s*(\d+)', r'\1 * \2', raw_str)
                 clean_str = clean_str.replace("^", "**")
-                if clean_str.endsWith("="):
+                if clean_str.endswith("="):
                     clean_str = clean_str[:-1].strip()
 
                 st.markdown("---")
