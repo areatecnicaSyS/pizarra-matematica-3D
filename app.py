@@ -177,14 +177,3 @@ with col_results:
             f"Error al interpretar la expresión. Revisa la sintaxis. Detalle:"
             f" {e}"
         )
-```
-
----
-
-### ¿Cómo subirlo a tu GitHub para que funcione en Streamlit Cloud?
-
-1. En tu repositorio de GitHub, actualiza el archivo `requirements.txt` con las dependencias listadas arriba.
-2. Actualiza el código del archivo `app.py`.
-3. Ve a **Streamlit Cloud** y haz clic en **"Manage App" -> "Reboot"**.
-
-¡Listo! De esta manera mantendrás el diseño en Python con Streamlit y la experiencia completa del lápiz interactivo y las capturas.
