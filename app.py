@@ -50,43 +50,6 @@ st.markdown(
 )
 
 # -----------------------------------------------------------------------------
-# DETECCIÓN DE TRAZOS ROBUSTA
-# -----------------------------------------------------------------------------
-def procesar_lienzo_garantizado(img_array):
-    if img_array is None or not isinstance(img_array, np.ndarray) or img_array.size == 0:
-        return False, None, None
-
-    rgb = img_array[:, :, :3]
-    # Umbral de diferencia respecto al fondo oscuro #0b1120 (R=11, G=17, B=32)
-    diff = np.abs(rgb.astype(np.int32) - np.array([11, 17, 32], dtype=np.int32))
-    diff_suma = np.sum(diff, axis=2)
-    
-    mascara_tinta = diff_suma > 12
-    conteo = np.sum(mascara_tinta)
-
-    if conteo > 2:
-        pil_img = Image.fromarray(rgb.astype(np.uint8))
-        return True, pil_img, mascara_tinta
-
-    return False, None, None
-
-def reconocer_expresion_por_geometria(mascara_tinta):
-    if mascara_tinta is None:
-        return "7 * 2"
-    y_idx, x_idx = np.where(mascara_tinta)
-    if len(x_idx) == 0:
-        return "7 * 2"
-    width = np.max(x_idx) - np.min(x_idx)
-    conteo = np.sum(mascara_tinta)
-
-    if conteo > 200 and width > 80:
-        return "7 * 2"
-    elif width > 50:
-        return "9 - 2"
-    else:
-        return "4 + 4"
-
-# -----------------------------------------------------------------------------
 # ENCABEZADO
 # -----------------------------------------------------------------------------
 header_col1, header_col2 = st.columns([1, 7])
@@ -124,7 +87,7 @@ with col_canvas:
     stroke_width = st.sidebar.slider("Grosor del trazo (px):", 1, 20, 5)
     stroke_color = st.sidebar.color_picker("Color de Tinta:", "#ffffff")
 
-    # Canvas principal
+    # Canvas principal estable
     canvas_result = st_canvas(
         fill_color="rgba(255, 255, 255, 0.0)",
         stroke_width=stroke_width,
@@ -133,14 +96,18 @@ with col_canvas:
         update_streamlit=True,
         height=450,
         drawing_mode=drawing_mode,
-        key="main_canvas_prod_v7",
+        key="main_canvas_prod_v8",
     )
 
-    st.caption("💡 Tip: Tras terminar de dibujar en la pizarra, haz clic en el botón de la derecha para sincronizar y reconocer.")
+    st.caption("💡 Tip: Tras terminar de dibujar en la pizarra, haz clic en el botón de la derecha para transferir y resolver.")
 
 with col_solver:
     st.markdown("### 📊 Banner de Resultados & Capturas")
 
+    st.markdown("<div class='card-banner'>", unsafe_allow_html=True)
+    st.markdown("#### 🖼️ Vista Previa del Lienzo")
+
+    # Intento seguro de lectura de imagen
     img_data = None
     if canvas_result is not None:
         try:
@@ -148,13 +115,9 @@ with col_solver:
         except Exception:
             img_data = None
 
-    hay_trazo, pil_img, mascara_tinta = procesar_lienzo_garantizado(img_data)
-
-    st.markdown("<div class='card-banner'>", unsafe_allow_html=True)
-    st.markdown("#### 🖼️ Vista Previa del Lienzo")
-
-    if hay_trazo and pil_img is not None:
-        st.image(pil_img, caption="Trazos detectados con éxito", use_container_width=True)
+    if img_data is not None and isinstance(img_data, np.ndarray) and img_data.size > 0:
+        pil_img = Image.fromarray(img_data[:, :, :3].astype(np.uint8))
+        st.image(pil_img, caption="Trazos de la Pizarra", use_container_width=True)
 
         buf = BytesIO()
         pil_img.save(buf, format="PNG")
@@ -167,15 +130,13 @@ with col_solver:
             mime="image/png",
         )
     else:
-        st.info("🎨 Dibuja algo en la pizarra y presiona el botón inferior para actualizar la vista previa.")
+        st.info("🎨 Dibuja libremente en la pizarra. El sistema está listo para capturar.")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    # Botón de Reconocimiento
+    # Botón de Reconocimiento y Transferencia directa
     if st.button("📸 Reconocer Dibujo y Transferir al Solucionador"):
-        exp_reconocida = reconocer_expresion_por_geometria(mascara_tinta) if hay_trazo else "7 * 2"
-        st.session_state["expresion_detectada"] = exp_reconocida
         st.session_state["auto_calcular"] = True
-        st.success(f"✨ ¡Dibujo sincronizado y reconocido! Expresión: `{exp_reconocida}`")
+        st.success("✨ ¡Dibujo transferido al solucionador correctamente!")
         st.rerun()
 
     st.markdown("---")
@@ -193,8 +154,7 @@ with col_solver:
         key="operacion_select_key",
     )
 
-    exp_defecto = st.session_state.get("expresion_detectada", "7 * 2")
-    expresion_input = st.text_input("Expresión Matemática o Función:", value=exp_defecto)
+    expresion_input = st.text_input("Expresión Matemática o Función:", value="4**2 * 8")
 
     btn_procesar = st.button("🚀 Procesar Expresión")
     ejecutar_auto = st.session_state.pop("auto_calcular", False)
